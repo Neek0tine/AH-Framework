@@ -45,6 +45,8 @@ class ahframework:
         self.query_title = None
         self.file_title = None
 
+        self.gogoanime = False
+
     def downloader(self, mode):
 
         def progress_callback(progress):
@@ -99,7 +101,7 @@ class ahframework:
                 # _queue = [ep for ep in list(range(1, self.episodes + 1)) if ep not in [int((list(str(ep.name).split(' '))[-1].split('.'))[0]) for ep in scandir(download_location + '/Downloader/' + self.file_title)]]
                 if len(_queue) == 0:
                     print('[+] File already exists without missing an episode. Please look for a new series!')
-                    self.aninfo()
+                    mainmenu()
 
                 print('[+] Found existing folder in the directory, checking for episodes ... ')
                 print(f'[+] Downloading missing episodes: {", ".join(str(v) for v in _queue)}.')
@@ -109,7 +111,7 @@ class ahframework:
                 f'\n\n[+] Getting download link from {url} for {self.title} Episode {episode}/{self.episodes}',
                 80))
             driver.get(url)
-            driver.find_element_by_xpath('/html/body/div[1]/div/div[7]/div/div[7]/div').click()
+            driver.find_element_by_xpath("/html/body/div[2]/div/div/section/section[1]/div[1]/div[2]/div[1]/div[5]/ul/li[1]/a").click()
             window_after = driver.window_handles[1]
             driver.close()
             driver.switch_to.window(window_after)
@@ -122,13 +124,31 @@ class ahframework:
             while loader.is_active():
                 sleep(2)
 
-        if _custom_episode != 0:
+        def get_files_gogo(url, episode):
+            print(fill(
+                f'\n\n[+] Getting download link from {url} for {self.title} Episode {episode}/{self.episodes}',
+                80))
+            driver.get(url)
+            driver.find_element_by_xpath('#wrapper_bg > section > section.content_left > div:nth-child(1) > div.anime_video_body > div.anime_video_body_cate > div.favorites_book > ul > li.dowloads > a').click()
+            window_after = driver.window_handles[1]
+            driver.close()
+            driver.switch_to.window(window_after)
+            _download_link = driver.find_element_by_css_selector('#main > div > div.content_c > div > div:nth-child(5) > div:nth-child(3) > a').get_attribute('href')
+
+            target = pyloader.DLable(url=_download_link, target_dir=f'{download_location}\\Downloader\\{self.file_title}',
+                            file_name=f'{self.file_title} Episode {str(episode)}.mp4')
+            loader.download(target)
+
+            while loader.is_active():
+                sleep(2)
+
+        if _custom_episode != 0 and not self.gogoanime:
             link = ('https://animekisa.tv/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(_custom_episode))
             get_files(link, _custom_episode)
             print('[+] Download complete!\n')
-            self.aninfo()
+            mainmenu()
 
-        else:
+        elif _custom_episode == 0 and not self.gogoanime:
             link = [('https://animekisa.tv/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(x)) for x in _queue]
             _index = int(_queue[0])
             for _item in link:
@@ -136,16 +156,34 @@ class ahframework:
                 print()
                 _index += 1
             print('[+] Download complete!\n')
-            self.aninfo()
+            mainmenu()
+
+        elif _custom_episode != 0 and self.gogoanime:
+            link = ('https://gogoanime.pe/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(
+                _custom_episode))
+            get_files_gogo(link, _custom_episode)
+            print('[+] Download complete!\n')
+            mainmenu()
+
+        elif _custom_episode == 0 and self.gogoanime:
+            link = [('https://gogoanime.pe/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(x)) for x in
+                    _queue]
+            _index = int(_queue[0])
+            for _item in link:
+                get_files(_item, _index)
+                print()
+                _index += 1
+            print('[+] Download complete!\n')
+            mainmenu()
 
     def aninfo(self):
-
         while True:
             self._usr_inp = input('[+] Search Anime: ')
 
             if len(self._usr_inp) == 0:
-                print('[!] Please enter a valid input!')
-                continue
+                print('[!] Goodbye!')
+                sleep(0.3)
+                mainmenu()
 
             else:
                 self._anime_search_result = self.client.search_anime(self._usr_inp)
@@ -161,7 +199,7 @@ class ahframework:
                     'selected anime']
 
                 if _anime_selected == '[CANCEL]':
-                    self.aninfo()
+                    mainmenu()
 
                 elif _anime_selected == '[CHANGE SEARCH ENGINE]':
                     html = PoolManager()
@@ -188,7 +226,7 @@ class ahframework:
                             print(
                                 f'[!] AnimeKisa error code {_initial_search.status}! Please try again in several '
                                 f'minutes!')
-                            self.aninfo()
+                            mainmenu()
 
                         elif len(_initial_search_result) == 0:
                             print('[!] Could not find anything. Please try again.   ')
@@ -243,6 +281,7 @@ class ahframework:
 
                     elif _search_engine == 'GogoAnime':
                         print('[+] Changed search engine to GogoAnime\n')
+                        self.gogoanime = True
 
                         _initial_requests = html.request('GET', 'https://gogoanime.pe//search.html?keyword=' + str(
                             (urlencode({'q': f'{self._usr_inp}'}).split('='))[-1]))
@@ -276,7 +315,7 @@ class ahframework:
                             _title_name = (inquirer.prompt(selection))['Selected']
 
                             if _title_name == 'Cancel':
-                                self.aninfo()
+                                mainmenu()
 
                             _index_bridge = int(_title_list.index(f"{_title_name}"))
                             _title_link = _href_list[_index_bridge]
@@ -356,17 +395,94 @@ class ahframework:
 
 
 if __name__ == '__main__':
-    print(
-        '=' * 55 + '\n _ _ _         _   \n| | | |___ ___| |_   AnimeHub Framework by Neek0tine\n| | | | -_| -_| . '
-                   '|  Version 0.1\n|_____|___|___|___|  https://github.com/neek0tine\n' + '=' * 55)
+    ahf = ahframework()
+
+    def mainmenu():
+        print(
+            '=' * 55 + '\n _ _ _         _   \n| | | |___ ___| |_   AnimeHub Framework by Neek0tine\n| | | | -_| -_| . '
+                       '|  Version 0.1\n|_____|___|___|___|  https://github.com/neek0tine\n' + '=' * 55)
+
+        main_selection = \
+            (inquirer.prompt([inquirer.List('Main Menu', message="What to do?", choices=['Search Anime', 'Update MAL data', 'Cancel'])]))[
+                'Main Menu']
+        if main_selection == 'Cancel':
+            quit()
+
+        elif main_selection == 'Update MAL data':
+
+            _mal_anime_list = [str(entry.name) for entry in scandir(str(winreg.QueryValueEx(
+                winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                               'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'),
+                '{374DE290-123F-4565-9164-39C4925E467B}')[0]) + '\Downloader')]
+            _mal_anime_list.append('Cancel')
+
+            _mal_my_status = dict()
+            _mal_anime = list()
+
+            _mal_menu = (inquirer.prompt([inquirer.List('init', message="Is the anime already downloaded? ", choices=['Yes', 'Custom Series', 'Cancel'])]))['init']
+
+            if _mal_menu == 'Custom Series':
+                _mal_anime = ahf.client.search_anime(input('[+] Enter anime name: '), limit=1)
+
+            elif _mal_menu == 'Cancel':
+                quit()
+
+            else:
+                _mal_title_name = (inquirer.prompt([
+                    inquirer.List('Selected', message="Pick a series you wish to rate: ", choices=_mal_anime_list)]))['Selected']
+                if _mal_title_name == 'Cancel':
+                    self.select()
+
+                _mal_anime = ahf.client.search_anime(_mal_title_name, limit=1)
+            try:
+                print(_mal_anime[0].title)
+                print()
+            except IndexError:
+                print('[!] Sorry, currently this API has no access to this anime!')
+                mainmenu()
+
+            _mal_todo = (inquirer.prompt([
+                inquirer.List('Todo', message='What to do', choices=['Rate', 'Drop', 'Watch later', 'Hold', 'Cancel'])]))['Todo']
+
+            print(f'[+] {_mal_todo}: ')
+
+            if _mal_todo == 'Hold':
+                _mal_my_status = {'status': 'on_hold'}
+                print(_mal_anime[0].title, '\nStatus:', _mal_my_status['status'], '\n')
+
+            elif _mal_todo == 'Watch later':
+                _mal_my_status = {'status': 'plan_to_watch'}
+                print(_mal_anime[0].title, '\nStatus:', _mal_my_status['status'], '\n')
+
+            elif _mal_todo == 'Drop':
+                _mal_my_status = {'status': 'dropped'}
+                print(_mal_anime[0].title, '\nStatus:', _mal_my_status['status'], '\n')
+
+            elif _mal_todo == 'Cancel':
+                self.select()
+
+            else:
+
+                while True:
+                    try:
+                        _mal_score = int(input('How good? (1-10): '))
+                        if _mal_score < 0 or _mal_score > 10:
+                            print('[+] Please enter a valid number in range of 1 to 10!!\n')
+                        else:
+                            _mal_my_status = {'status': 'completed', 'score': _mal_score}
+                            print(_mal_anime[0].title, '\nStatus:', _mal_my_status['status'], 'Score:', _mal_my_status['score'], '\n')
+                            break
+                    except TypeError:
+                        print('[+] Please enter a valid number!\n')
+
+            ahf.client.update_anime_my_list_status(_mal_anime[0].id, _mal_my_status)
+            print('Status update success! Returning to main menu.. \n')
+            mainmenu()
+
+        else:
+            ahf.aninfo()
+
 
     if selenium_installer.get_msedge_driver():
         while True:
-            ahf = ahframework()
-            main_selection = \
-                (inquirer.prompt([inquirer.List('Main Menu', message="What to do?", choices=['Search Anime', 'Cancel'])]))[
-                    'Main Menu']
-            if main_selection == 'Cancel':
-                quit()
-            else:
-                ahf.aninfo()
+            mainmenu()
