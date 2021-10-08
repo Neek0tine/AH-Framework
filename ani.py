@@ -1,13 +1,18 @@
 import winreg
 import inquirer
 import malclient
-from os import scandir
+import pyloader
+import selenium_installer
+from time import sleep
 from textwrap import fill
 from bs4 import BeautifulSoup
 from tabulate import tabulate
 from urllib.parse import urlencode
 from re import sub, compile, escape
 from urllib3 import PoolManager, request
+from os import scandir, makedirs, getenv
+from msedge.selenium_tools import Edge, EdgeOptions
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 
 class ahframework:
@@ -37,7 +42,101 @@ class ahframework:
         self.episodes = None
         self.synopsis = None
         self.my_list = None
-        self.sys_safe_title = None
+        self.query_title = None
+        self.file_title = None
+
+    def downloader(self, mode):
+
+        def progress_callback(progress):
+            print(f'\rDownloading File: {progress.dlable.file_name}  Progress: ' + '{0:.2f}%'.format(
+                progress.percent), end='')
+            # `return True` if the download should be canceled
+            return False
+
+        loader = pyloader.Loader.get_loader()
+        loader.configure(
+            max_concurrent=1,
+            progress_cb=progress_callback,
+            update_interval=3,
+            daemon=False
+        )
+        loader.start()
+
+        options = EdgeOptions()
+        options.use_chromium = True
+        options.headless = False
+        options.add_argument(f"--user-data-dir={getenv('LOCALAPPDATA')}\\Microsoft\\Edge\\Generated Data")
+        options.add_argument("--profile-directory=Default")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--headless")
+        options.add_argument('--log-level=3')
+        driver = Edge(options=options)
+
+        _custom_episode = int()
+        _queue = list()
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders') as key:
+            download_location = winreg.QueryValueEx(key, '{374DE290-123F-4565-9164-39C4925E467B}')[0]
+
+        if mode == 'Single':
+            while _custom_episode == 0:
+                try:
+                    _custom_episode = int(input(f'[+] Which episode you wish to download? (1-{self.episodes}): '))
+                except ValueError:
+                    print(f'[!] Please enter a valid episode (1 - {self.episodes}')
+
+        else:
+            _file_list = scandir(download_location + '/Downloader')
+            try:
+                makedirs(f'{download_location}\\Downloader\\{self.file_title}')
+                _queue = [ep for ep in list(range(1, self.episodes + 1))]
+
+            except FileExistsError:
+                _queue = [ep for ep in list(range(1, self.episodes + 1)) if
+                          ep not in ([int(((str(entry)).split(' '))[-1].split('.')[0]) for entry in (scandir(
+                              download_location + '/Downloader/' + self.file_title))])]
+                # _queue = [ep for ep in list(range(1, self.episodes + 1)) if ep not in [int((list(str(ep.name).split(' '))[-1].split('.'))[0]) for ep in scandir(download_location + '/Downloader/' + self.file_title)]]
+                if len(_queue) == 0:
+                    print('[+] File already exists without missing an episode. Please look for a new series!')
+                    self.aninfo()
+
+                print('[+] Found existing folder in the directory, checking for episodes ... ')
+                print(f'[+] Downloading missing episodes: {", ".join(str(v) for v in _queue)}.')
+
+        def get_files(url, episode):
+            print(fill(
+                f'\n\n[+] Getting download link from {url} for {self.title} Episode {episode}/{self.episodes}',
+                80))
+            driver.get(url)
+            driver.find_element_by_xpath('/html/body/div[1]/div/div[7]/div/div[7]/div').click()
+            window_after = driver.window_handles[1]
+            driver.close()
+            driver.switch_to.window(window_after)
+            _download_link = driver.find_element_by_css_selector('#main > div > div.content_c > div > div:nth-child(5) > div:nth-child(3) > a').get_attribute('href')
+
+            target = pyloader.DLable(url=_download_link, target_dir=f'{download_location}\\Downloader\\{self.file_title}',
+                            file_name=f'{self.file_title} Episode {str(episode)}.mp4')
+            loader.download(target)
+
+            while loader.is_active():
+                sleep(2)
+
+        if _custom_episode != 0:
+            link = ('https://animekisa.tv/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(_custom_episode))
+            get_files(link, _custom_episode)
+            print('[+] Download complete!\n')
+            self.aninfo()
+
+        else:
+            link = [('https://animekisa.tv/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(x)) for x in _queue]
+            _index = int(_queue[0])
+            for _item in link:
+                get_files(_item, _index)
+                print()
+                _index += 1
+            print('[+] Download complete!\n')
+            self.aninfo()
 
     def aninfo(self):
 
@@ -114,11 +213,11 @@ class ahframework:
                             rep = dict((escape(k), v) for k, v in rep.items())
                             pattern = compile("|".join(rep.keys()))
 
-                            self.sys_safe_title = pattern.sub(lambda m: rep[escape(m.group(0))],
-                                                              _title_name.casefold())
+                            self.query_title = pattern.sub(lambda m: rep[escape(m.group(0))],
+                                                           _title_name.casefold())
 
                         _anime_info = BeautifulSoup(
-                            (html.request('GET', f'https://animekisa.tv/{self.sys_safe_title}')).data,
+                            (html.request('GET', f'https://animekisa.tv/{self.query_title}')).data,
                             features='html.parser')
 
                         _anime_details = [("".join(c.find_all(text=True))) for c in
@@ -135,12 +234,12 @@ class ahframework:
 
                         self.alt_title = _anime_details[0]
                         self.status = _anime_details[1]
-                        self.episodes = _anime_details[2]
+                        self.episodes = int(_anime_details[2])
                         self.synopsis = _anime_details[3]
                         self.title = _title_name
 
                         if self.episodes == '?':
-                            self.episodes = _anime_info.find('div', {'class': 'infoept2'}).getText()
+                            self.episodes = int(_anime_info.find('div', {'class': 'infoept2'}).getText())
 
                     elif _search_engine == 'GogoAnime':
                         print('[+] Changed search engine to GogoAnime\n')
@@ -164,6 +263,7 @@ class ahframework:
 
                         if len(_search_result) == 0:
                             print('[!] Could not find anything. Please try again!')
+                            self.aninfo()
 
                         else:
                             for _index, _item in enumerate(_search_result):
@@ -195,33 +295,33 @@ class ahframework:
                         self.media = infodes[0]
                         self.status = infodes[4]
                         self.year_aired = infodes[3]
-                        self.episodes = infodes[6]
+                        self.episodes = int(infodes[6])
                         self.synopsis = infodes[1]
+                else:
+                    _anime_details = self.client.get_anime_details(
+                        self._anime_search_result[int(self._anime_search_result_string.index(_anime_selected))].id)
 
-                _anime_details = self.client.get_anime_details(
-                    self._anime_search_result[int(self._anime_search_result_string.index(_anime_selected))].id)
+                    self.title = _anime_details.title
+                    self.alt_title = _anime_details.alternative_titles.en
 
-                self.title = _anime_details.title
-                self.alt_title = _anime_details.alternative_titles.en
+                    try:
+                        self.year_aired = _anime_details.start_season.year
+                    except AttributeError:
+                        self.year_aired = '?'
 
-                try:
                     self.year_aired = _anime_details.start_season.year
-                except AttributeError:
-                    self.year_aired = '?'
+                    self.score = _anime_details.mean
+                    self.media = _anime_details.media_type
+                    self.status = _anime_details.status
+                    self.genres = ", ".join(
+                        [_anime_details.genres[gen_index].name for gen_index in range(0, len(_anime_details.genres))])
+                    self.episodes = int(_anime_details.num_episodes)
+                    self.synopsis = _anime_details.synopsis
 
-                self.year_aired = _anime_details.start_season.year
-                self.score = _anime_details.mean
-                self.media = _anime_details.media_type
-                self.status = _anime_details.status
-                self.genres = ", ".join(
-                    [_anime_details.genres[gen_index].name for gen_index in range(0, len(_anime_details.genres))])
-                self.episodes = _anime_details.num_episodes
-                self.synopsis = _anime_details.synopsis
-
-                try:
-                    self.my_list = _anime_details.my_list_status
-                except AttributeError:
-                    self.my_list = '-'
+                    try:
+                        self.my_list = _anime_details.my_list_status
+                    except AttributeError:
+                        self.my_list = '-'
 
                 try:
                     print(tabulate([['Title', self.title],
@@ -236,18 +336,37 @@ class ahframework:
                 except AttributeError:
                     print('[!] Error, incomplete data. ')
 
+                if self.query_title is None:
+                    rep = {" ": "-", ":": "", "’": "-", "?": "", "!": "", ".": "", "/": "-", '★': '', '%': '', '+': '', '=': '', '³': '-'}
+                    rep = dict((escape(k), v) for k, v in rep.items())
+                    pattern = compile("|".join(rep.keys()))
+                    self.query_title = pattern.sub(lambda m: rep[escape(m.group(0))], self.title.casefold())
+
+                    self.file_title = sub('[^A-Za-z0-9-,! ]+', '', self.title)
+
+            download_confirmation = (inquirer.prompt(
+                [inquirer.List('Selected', message="Proceed to download??", choices=['Cancel', 'All', 'Single'])]))[
+                'Selected']
+            if download_confirmation == 'Single':
+                ahf.downloader(mode='Single')
+            elif download_confirmation == 'Cancel':
+                ahf.aninfo()
+            elif download_confirmation == 'All':
+                ahf.downloader(mode='All')
+
 
 if __name__ == '__main__':
     print(
         '=' * 55 + '\n _ _ _         _   \n| | | |___ ___| |_   AnimeHub Framework by Neek0tine\n| | | | -_| -_| . '
                    '|  Version 0.1\n|_____|___|___|___|  https://github.com/neek0tine\n' + '=' * 55)
-    ahf = ahframework()
 
-    main_selection = \
-        (inquirer.prompt([inquirer.List('Main Menu', message="What to do?", choices=['Search Anime', 'Cancel'])]))[
-            'Main Menu']
-
-    if main_selection == 'Cancel':
-        quit()
-    else:
-        ahf.aninfo()
+    if selenium_installer.get_msedge_driver():
+        while True:
+            ahf = ahframework()
+            main_selection = \
+                (inquirer.prompt([inquirer.List('Main Menu', message="What to do?", choices=['Search Anime', 'Cancel'])]))[
+                    'Main Menu']
+            if main_selection == 'Cancel':
+                quit()
+            else:
+                ahf.aninfo()
