@@ -2,7 +2,6 @@ import winreg
 import inquirer
 import malclient
 from os import scandir
-from json import loads
 from textwrap import fill
 from tabulate import tabulate
 
