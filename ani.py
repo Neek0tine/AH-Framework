@@ -1,18 +1,17 @@
 import winreg
+from os import scandir, makedirs, getenv
+from re import sub, compile, escape
+from textwrap import fill
+from time import sleep
+from urllib.parse import urlencode
 import inquirer
 import malclient
 import pyloader
-import selenium_installer
-from time import sleep
-from textwrap import fill
 from bs4 import BeautifulSoup
-from tabulate import tabulate
-from urllib.parse import urlencode
-from re import sub, compile, escape
-from urllib3 import PoolManager, request
-from os import scandir, makedirs, getenv
 from msedge.selenium_tools import Edge, EdgeOptions
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from tabulate import tabulate
+from urllib3 import PoolManager
+import selenium_installer
 
 
 class ahframework:
@@ -56,12 +55,14 @@ class ahframework:
             return False
 
         loader = pyloader.Loader.get_loader()
+
         loader.configure(
             max_concurrent=1,
             progress_cb=progress_callback,
             update_interval=3,
             daemon=False
         )
+
         loader.start()
 
         options = EdgeOptions()
@@ -98,7 +99,9 @@ class ahframework:
                 _queue = [ep for ep in list(range(1, self.episodes + 1)) if
                           ep not in ([int(((str(entry)).split(' '))[-1].split('.')[0]) for entry in (scandir(
                               download_location + '/Downloader/' + self.file_title))])]
-                # _queue = [ep for ep in list(range(1, self.episodes + 1)) if ep not in [int((list(str(ep.name).split(' '))[-1].split('.'))[0]) for ep in scandir(download_location + '/Downloader/' + self.file_title)]]
+                # _queue = [ep for ep in list(range(1, self.episodes + 1)) if ep not in [int((list(str(
+                # ep.name).split(' '))[-1].split('.'))[0]) for ep in scandir(download_location + '/Downloader/' +
+                # self.file_title)]]
                 if len(_queue) == 0:
                     print('[+] File already exists without missing an episode. Please look for a new series!')
                     mainmenu()
@@ -111,15 +114,21 @@ class ahframework:
                 f'\n\n[+] Getting download link from {url} for {self.title} Episode {episode}/{self.episodes}',
                 80))
             driver.get(url)
-            driver.find_element_by_xpath("/html/body/div[2]/div/div/section/section[1]/div[1]/div[2]/div[1]/div[5]/ul/li[1]/a").click()
-            window_after = driver.window_handles[1]
-            driver.close()
-            driver.switch_to.window(window_after)
-            _download_link = driver.find_element_by_css_selector('#main > div > div.content_c > div > div:nth-child(5) > div:nth-child(3) > a').get_attribute('href')
+            try:
+                driver.find_element_by_css_selector("#main > div:nth-child(7) > div").click()
+                window_after = driver.window_handles[1]
+                driver.close()
+                driver.switch_to.window(window_after)
+                _download_link = driver.find_element_by_css_selector(
+                    '#main > div > div.content_c > div > div:nth-child(5) > div:nth-child(3) > a').get_attribute('href')
 
-            target = pyloader.DLable(url=_download_link, target_dir=f'{download_location}\\Downloader\\{self.file_title}',
-                            file_name=f'{self.file_title} Episode {str(episode)}.mp4')
-            loader.download(target)
+                target = pyloader.DLable(url=_download_link,
+                                         target_dir=f'{download_location}\\Downloader\\{self.file_title}',
+                                         file_name=f'{self.file_title} Episode {str(episode)}.mp4')
+                loader.download(target)
+            except:
+                print('[+] Ouch, I missed the download button. Care to try again?')
+                self.aninfo()
 
             while loader.is_active():
                 sleep(2)
@@ -129,27 +138,37 @@ class ahframework:
                 f'\n\n[+] Getting download link from {url} for {self.title} Episode {episode}/{self.episodes}',
                 80))
             driver.get(url)
-            driver.find_element_by_xpath('#wrapper_bg > section > section.content_left > div:nth-child(1) > div.anime_video_body > div.anime_video_body_cate > div.favorites_book > ul > li.dowloads > a').click()
-            window_after = driver.window_handles[1]
-            driver.close()
-            driver.switch_to.window(window_after)
-            _download_link = driver.find_element_by_css_selector('#main > div > div.content_c > div > div:nth-child(5) > div:nth-child(3) > a').get_attribute('href')
+            try:
+                driver.find_element_by_xpath(
+                    '#wrapper_bg > section > section.content_left > div:nth-child(1) > div.anime_video_body > '
+                    'div.anime_video_body_cate > div.favorites_book > ul > li.dowloads > a').click()
+                window_after = driver.window_handles[1]
+                driver.close()
+                driver.switch_to.window(window_after)
+                _download_link = driver.find_element_by_css_selector(
+                    '#main > div > div.content_c > div > div:nth-child(5) > div:nth-child(3) > a').get_attribute('href')
 
-            target = pyloader.DLable(url=_download_link, target_dir=f'{download_location}\\Downloader\\{self.file_title}',
-                            file_name=f'{self.file_title} Episode {str(episode)}.mp4')
-            loader.download(target)
+                target = pyloader.DLable(url=_download_link,
+                                         target_dir=f'{download_location}\\Downloader\\{self.file_title}',
+                                         file_name=f'{self.file_title} Episode {str(episode)}.mp4')
+                loader.download(target)
+            except:
+                print('[+] Ouch, I missed the download button. Care to try again?')
+                self.aninfo()
 
             while loader.is_active():
                 sleep(2)
 
         if _custom_episode != 0 and not self.gogoanime:
-            link = ('https://animekisa.tv/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(_custom_episode))
+            link = ('https://animekisa.tv/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(
+                _custom_episode))
             get_files(link, _custom_episode)
             print('[+] Download complete!\n')
             mainmenu()
 
         elif _custom_episode == 0 and not self.gogoanime:
-            link = [('https://animekisa.tv/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(x)) for x in _queue]
+            link = [('https://animekisa.tv/' + (str(self.query_title).split('/'))[-1] + '-episode-' + str(x)) for x in
+                    _queue]
             _index = int(_queue[0])
             for _item in link:
                 get_files(_item, _index)
@@ -376,7 +395,8 @@ class ahframework:
                     print('[!] Error, incomplete data. ')
 
                 if self.query_title is None:
-                    rep = {" ": "-", ":": "", "’": "-", "?": "", "!": "", ".": "", "/": "-", '★': '', '%': '', '+': '', '=': '', '³': '-'}
+                    rep = {" ": "-", ":": "", "’": "-", "?": "", "!": "", ".": "", "/": "-", '★': '', '%': '', '+': '',
+                           '=': '', '³': '-'}
                     rep = dict((escape(k), v) for k, v in rep.items())
                     pattern = compile("|".join(rep.keys()))
                     self.query_title = pattern.sub(lambda m: rep[escape(m.group(0))], self.title.casefold())
@@ -397,16 +417,21 @@ class ahframework:
 if __name__ == '__main__':
     ahf = ahframework()
 
+
     def mainmenu():
         print(
             '=' * 55 + '\n _ _ _         _   \n| | | |___ ___| |_   AnimeHub Framework by Neek0tine\n| | | | -_| -_| . '
                        '|  Version 0.1\n|_____|___|___|___|  https://github.com/neek0tine\n' + '=' * 55)
 
         main_selection = \
-            (inquirer.prompt([inquirer.List('Main Menu', message="What to do?", choices=['Search Anime', 'Update MAL data', 'Cancel'])]))[
+            (inquirer.prompt([inquirer.List('Main Menu', message="What to do?",
+                                            choices=['Search Anime', 'Update ongoing series', 'Update MAL data', 'Cancel'])]))[
                 'Main Menu']
         if main_selection == 'Cancel':
             quit()
+
+        elif main_selection == 'Update ongoing series':
+            print('This feature is being worked on!')
 
         elif main_selection == 'Update MAL data':
 
@@ -419,7 +444,8 @@ if __name__ == '__main__':
             _mal_my_status = dict()
             _mal_anime = list()
 
-            _mal_menu = (inquirer.prompt([inquirer.List('init', message="Is the anime already downloaded? ", choices=['Yes', 'Custom Series', 'Cancel'])]))['init']
+            _mal_menu = (inquirer.prompt([inquirer.List('init', message="Is the anime already downloaded? ",
+                                                        choices=['Yes', 'Custom Series', 'Cancel'])]))['init']
 
             if _mal_menu == 'Custom Series':
                 _mal_anime = ahf.client.search_anime(input('[+] Enter anime name: '), limit=1)
@@ -429,7 +455,8 @@ if __name__ == '__main__':
 
             else:
                 _mal_title_name = (inquirer.prompt([
-                    inquirer.List('Selected', message="Pick a series you wish to rate: ", choices=_mal_anime_list)]))['Selected']
+                    inquirer.List('Selected', message="Pick a series you wish to rate: ", choices=_mal_anime_list)]))[
+                    'Selected']
                 if _mal_title_name == 'Cancel':
                     self.select()
 
@@ -442,7 +469,8 @@ if __name__ == '__main__':
                 mainmenu()
 
             _mal_todo = (inquirer.prompt([
-                inquirer.List('Todo', message='What to do', choices=['Rate', 'Drop', 'Watch later', 'Hold', 'Cancel'])]))['Todo']
+                inquirer.List('Todo', message='What to do',
+                              choices=['Rate', 'Drop', 'Watch later', 'Hold', 'Cancel'])]))['Todo']
 
             print(f'[+] {_mal_todo}: ')
 
@@ -470,7 +498,8 @@ if __name__ == '__main__':
                             print('[+] Please enter a valid number in range of 1 to 10!!\n')
                         else:
                             _mal_my_status = {'status': 'completed', 'score': _mal_score}
-                            print(_mal_anime[0].title, '\nStatus:', _mal_my_status['status'], 'Score:', _mal_my_status['score'], '\n')
+                            print(_mal_anime[0].title, '\nStatus:', _mal_my_status['status'], 'Score:',
+                                  _mal_my_status['score'], '\n')
                             break
                     except TypeError:
                         print('[+] Please enter a valid number!\n')

@@ -1,0 +1,6 @@
+inquirer~=2.7.0
+malclient~=0.1.5
+beautifulsoup4~=4.10.0
+tabulate~=0.8.9
+urllib3~=1.26.7
+setuptools~=57.0.0
