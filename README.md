@@ -1,6 +1,8 @@
 
 <a href='https://discord.gg/gWqbP9j3EV'> ![Discord](https://img.shields.io/discord/257479001365413889?label=Discord&style=flat-square) This is where I live. </a>
 
+# (PROGRAM DOES NOT FUNCTION ANYMORE DUE TO LEGAL REASONS)
+
 
 # AnimeHub Framework
 
